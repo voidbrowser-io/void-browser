@@ -1,0 +1,77 @@
+.page {
+  --bg: oklch(16% 0.015 270);
+  --panel: oklch(21% 0.02 270);
+  --text: oklch(94% 0.01 270);
+  --muted: oklch(66% 0.02 270);
+  --line: oklch(30% 0.02 270);
+  --accent: oklch(62% 0.2 275);
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 28px;
+  height: 100%;
+  padding-top: 90px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  h1 { font-size: 40px; letter-spacing: -1px; }
+}
+
+.logo {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  corner-shape: squircle;
+  background: linear-gradient(135deg, var(--accent), oklch(70% 0.17 330));
+  box-shadow: 0 12px 40px oklch(62% 0.2 275 / 0.45);
+}
+
+.muted { color: var(--muted); font-size: 14px; }
+
+.search {
+  width: 560px;
+  padding: 12px 20px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 16px;
+  &:focus { border-color: var(--accent); }
+}
+
+.cards {
+  display: grid;
+  grid-template-columns: repeat(2, 300px);
+  gap: 14px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 16px 18px;
+  border-radius: 14px;
+  corner-shape: squircle;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  &:hover { border-color: var(--accent); }
+}
+
+.card-title { font-weight: 600; font-size: 16px; }
+
+.card-url {
+  font-family: Cascadia Code, Consolas, monospace;
+  font-size: 11px;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.tips { color: var(--muted); font-size: 12px; }

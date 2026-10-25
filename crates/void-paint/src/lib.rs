@@ -75,6 +75,12 @@ impl Painter<'_> {
                     value.clone()
                 };
                 let layout = text_layout(self.fcx, self.lcx, &[TextRun { text, style: s }], None, "start");
+                let focused = self.dom.focus == Some(*id);
+                if focused && self.dom.get(*id).is_some_and(|n| n.selected) && !value.is_empty() {
+                    let h = style.font_size as f64 * style.line_height as f64;
+                    let sel = Rect::new(content.x, content.y, content.x + layout.width() as f64, content.y + h);
+                    self.scene.fill(Fill::NonZero, self.transform, Color::new([0.38, 0.42, 1.0, 0.45]), None, &sel);
+                }
                 draw_text(self.scene, self.transform * Affine::translate(content.to_vec2()), &layout);
                 if self.dom.focus == Some(*id) && self.caret_on {
                     let x = if value.is_empty() { 0.0 } else { layout.width() as f64 } + content.x + 1.0;

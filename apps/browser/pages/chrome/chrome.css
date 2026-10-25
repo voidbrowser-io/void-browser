@@ -1,0 +1,128 @@
+.chrome {
+  --bg: oklch(17% 0.015 270);
+  --tab: oklch(23% 0.02 270);
+  --tab-active: oklch(27% 0.02 270);
+  --text: oklch(93% 0.01 270);
+  --muted: oklch(66% 0.02 270);
+  --line: oklch(32% 0.02 270);
+  --accent: oklch(62% 0.2 275);
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 13px;
+  border-bottom: 1px solid var(--line);
+}
+
+.strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 40px;
+  padding: 6px 8px 0;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 220px;
+  min-width: 70px;
+  height: 34px;
+  padding: 0 8px 0 12px;
+  border-radius: 9px;
+  border-bottom-left-radius: 0;
+  background: transparent;
+  color: var(--muted);
+  overflow: hidden;
+
+  &:hover { background: var(--tab); }
+  &.active { background: var(--tab-active); color: var(--text); }
+}
+
+.dot {
+  flex: 0 0 8px;
+  width: 8px;
+  height: 8px;
+  border-radius: 4px;
+  background: linear-gradient(135deg, var(--accent), oklch(70% 0.17 330));
+  &.err { background: oklch(63% 0.2 25); }
+}
+
+.title {
+  flex: 1 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 20px;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  font-size: 15px;
+  color: var(--muted);
+  &:hover { background: var(--line); color: var(--text); }
+}
+
+.add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 2px;
+  border-radius: 8px;
+  font-size: 18px;
+  color: var(--muted);
+  &:hover { background: var(--tab); color: var(--text); }
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-grow: 1;
+  padding: 0 8px;
+  background: var(--tab-active);
+}
+
+.nav {
+  width: 32px;
+  height: 30px;
+  padding: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  font-size: 16px;
+  &:hover { background: var(--line); }
+  &.off { color: oklch(45% 0.02 270); }
+}
+
+.url {
+  flex-grow: 1;
+  margin: 0 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+  white-space: nowrap;
+  &:focus { border-color: var(--accent); }
+}
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, var(--accent), oklch(70% 0.17 330));
+}

@@ -23,6 +23,8 @@ pub struct Node {
     pub listeners: HashSet<String>,
     /// Value of an `<input>`.
     pub value: String,
+    /// The whole input value is selected (typing replaces it).
+    pub selected: bool,
 }
 
 impl Node {
@@ -57,6 +59,7 @@ impl Dom {
             inline_style: String::new(),
             listeners: HashSet::new(),
             value: String::new(),
+            selected: false,
         });
         (self.nodes.len() - 1) as NodeId
     }
@@ -134,6 +137,18 @@ impl Dom {
             }
         }
         self.dirty = true;
+    }
+
+    /// Focus an `<input>` and select its value, like clicking an address bar.
+    pub fn focus_input(&mut self, id: NodeId) {
+        if self.get(id).and_then(|n| n.tag()) == Some("input") {
+            if let Some(old) = self.focus {
+                self.nodes[old as usize].selected = false;
+            }
+            self.focus = Some(id);
+            self.nodes[id as usize].selected = true;
+            self.dirty = true;
+        }
     }
 
     pub fn listen(&mut self, id: NodeId, event: &str) {

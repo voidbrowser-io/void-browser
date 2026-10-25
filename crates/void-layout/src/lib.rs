@@ -210,7 +210,7 @@ pub fn text_layout(
         b.push(StyleProperty::Brush(TextBrush([c.r, c.g, c.b, c.a])), range.clone());
     }
     let mut layout: Layout<TextBrush> = b.build(text);
-    layout.break_all_lines(max_width);
+    layout.break_all_lines(if first.nowrap { None } else { max_width });
     let alignment = match align {
         "center" => parley::Alignment::Center,
         "right" | "end" => parley::Alignment::End,

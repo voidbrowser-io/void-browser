@@ -20,3 +20,5 @@ winit.workspace = true
 notify.workspace = true
 pollster.workspace = true
 png = "0.18"
+url = "2"
+arboard = "3"

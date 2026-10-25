@@ -40,6 +40,33 @@ pnpm install
 pnpm react
 ```
 
+## Browsing
+
+Void has tabs, history and an address bar. The browser UI itself is a Void
+page written in TSX (`apps/browser/pages/chrome`), rendered by the same engine.
+
+Every tab runs its own JS engine and DOM. A tab can open:
+
+| Address | What happens |
+|---|---|
+| `void://newtab` | Built-in pages, compiled into the binary (privileged, like `chrome://`) |
+| `file:///…` or a local path | Loaded from disk, **hot-reloads** on save |
+| `http(s)://…/main.tsx` | Modules fetched over the network, transpiled on import |
+| `http(s)://…/` (HTML) | Void finds `<script type="module" src="…">` and runs it — the Vite convention |
+| Anything else | Refused: legacy HTML is not supported, on purpose |
+
+`<a href>` links, `navigate(url)` and `setTitle(title)` from `"void"` work inside pages.
+
+Shortcuts: `Ctrl+T` new tab · `Ctrl+W` close · `Ctrl+L` address bar ·
+`Ctrl+Tab` / `Ctrl+1…9` switch · `Alt+←/→` back/forward · `F5` reload ·
+`Ctrl+A/C/V` in inputs.
+
+```bash
+# Serve the demo over HTTP and open it in Void
+python -m http.server 8080 -d apps/web-void
+cargo run -p void-browser --release -- http://localhost:8080/
+```
+
 ## The Void profile
 
 | Kept | Dropped |
@@ -71,7 +98,7 @@ nodes and attributes that read them update.
 ## Automation
 
 ```bash
-void apps/web-void/src/main.tsx --auto "click 120 480; type hello; key Enter; shot out.png; quit"
+void apps/web-void --auto "click 440 510; key ctrl+t; type localhost:8080; key enter; wait 300; shot out.png; quit"
 ```
 
 Scripted input and offscreen GPU screenshots, for tests and CI.

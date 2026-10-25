@@ -233,7 +233,9 @@ globalThis.__void_dispatch = (path, type, value, key) => {
     type, key, value,
     target: { id: path[0], value },
     stopped: false,
+    defaultPrevented: false,
     stopPropagation() { this.stopped = true; },
+    preventDefault() { this.defaultPrevented = true; },
   };
   batch(() => {
     for (const id of path) {
@@ -241,6 +243,16 @@ globalThis.__void_dispatch = (path, type, value, key) => {
       if (h) { ev.currentTarget = id; h(ev); if (ev.stopped) break; }
     }
   });
+  return !ev.defaultPrevented;
 };
+
+/** Go to another page (relative URLs resolve against this page). */
+export function navigate(url) { dom.navigate(String(url)); }
+
+/** Set the tab title. */
+export function setTitle(title) { dom.setTitle(String(title)); }
+
+/** Focus an input and select its value. */
+export function focus(node) { if (node) dom.focus(node.id); }
 
 export const now = () => dom.now();

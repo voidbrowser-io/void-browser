@@ -9,3 +9,5 @@ void-dom.workspace = true
 void-css.workspace = true
 rquickjs.workspace = true
 oxc.workspace = true
+ureq = "3"
+url = "2"

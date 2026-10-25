@@ -1,4 +1,4 @@
-//! Void CSS: modern-only subset. Nesting, custom properties, `:has`-free
+﻿//! Void CSS: modern-only subset. Nesting, custom properties, `:has`-free
 //! selectors, flex/grid, `oklch()`, gradients and shadows. No floats, no
 //! tables, no quirks, no vendor prefixes, `box-sizing: border-box` always.
 
@@ -6,7 +6,7 @@ use void_dom::{Dom, NodeId, NodeKind, ROOT};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-// ───────────────────────────── Stylesheet ─────────────────────────────
+// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Stylesheet в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 #[derive(Debug, Clone)]
 pub struct Rule {
@@ -165,7 +165,7 @@ fn resolve_nested(prelude: &str, parents: &[String]) -> Vec<String> {
     out
 }
 
-// ───────────────────────────── Selectors ─────────────────────────────
+// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Selectors в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 #[derive(Debug, Clone, Default)]
 pub struct Compound {
@@ -354,7 +354,7 @@ fn match_from(parts: &[(Compound, Comb)], dom: &Dom, id: NodeId) -> bool {
     }
 }
 
-// ───────────────────────────── Values ─────────────────────────────
+// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Values в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Rgba {
@@ -455,6 +455,7 @@ pub struct Style {
     pub line_height: f32,
     pub letter_spacing: f32,
     pub text_align: String,
+    pub nowrap: bool,
     pub custom: Rc<HashMap<String, String>>,
 }
 
@@ -496,11 +497,12 @@ impl Style {
             color: Rgba::rgb8(17, 17, 17),
             font_size: 16.0,
             font_weight: 400.0,
-            font_family: "Segoe UI Variable Text, Segoe UI, system-ui, sans-serif".into(),
+            font_family: "Segoe UI Variable Text, Segoe UI, Segoe UI Symbol, Segoe UI Emoji, system-ui, sans-serif".into(),
             italic: false,
             line_height: 1.4,
             letter_spacing: 0.0,
             text_align: "start".into(),
+            nowrap: false,
             custom: Rc::new(HashMap::new()),
         }
     }
@@ -516,12 +518,13 @@ impl Style {
         s.line_height = parent.line_height;
         s.letter_spacing = parent.letter_spacing;
         s.text_align = parent.text_align.clone();
+        s.nowrap = parent.nowrap;
         s.custom = parent.custom.clone();
         s
     }
 }
 
-// ───────────────────────────── Cascade ─────────────────────────────
+// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Cascade в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
 
 pub struct Cascade {
     pub styles: HashMap<NodeId, Style>,
@@ -800,6 +803,7 @@ fn apply(s: &mut Style, k: &str, v: &str) {
         }
         "letter-spacing" => s.letter_spacing = length_px(v, fs, 0.0).unwrap_or(0.0),
         "text-align" => s.text_align = v.to_string(),
+        "white-space" | "text-wrap" | "text-wrap-mode" => s.nowrap = v == "nowrap" || v == "pre",
         _ => {}
     }
 }
@@ -899,7 +903,7 @@ fn parse_background(v: &str, current: Rgba) -> Option<Background> {
                     continue;
                 }
             }
-            // Ignore explicit stop positions — stops are evenly spaced.
+            // Ignore explicit stop positions вЂ” stops are evenly spaced.
             let color_part = split_top(a, ' ').into_iter().next().unwrap_or_default();
             if let Some(c) = parse_color(&color_part, current) {
                 stops.push(c);
