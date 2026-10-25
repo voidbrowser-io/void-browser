@@ -1,0 +1,244 @@
+﻿/* The legacy tax: every browser app needs a reset before modern CSS behaves.
+   Void ships these defaults built in. */
+*, *::before, *::after { box-sizing: border-box; margin: 0; }
+html, body, #root { height: 100%; }
+body { font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
+button, input { font: inherit; border: none; cursor: pointer; }
+input { cursor: text; outline: none; }
+/* Void CSS: nesting, custom properties, oklch(), grid. No resets needed вЂ”
+   there is no legacy to reset. */
+
+.app {
+  --bg: oklch(98% 0.005 260);
+  --panel: #ffffff;
+  --text: oklch(22% 0.02 260);
+  --muted: oklch(52% 0.02 260);
+  --line: oklch(90% 0.01 260);
+  --accent: oklch(62% 0.2 275);
+  --accent-2: oklch(70% 0.17 330);
+  --chip: oklch(94% 0.01 260);
+
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+
+  &.dark {
+    --bg: oklch(16% 0.015 270);
+    --panel: oklch(21% 0.02 270);
+    --text: oklch(94% 0.01 270);
+    --muted: oklch(68% 0.02 270);
+    --line: oklch(30% 0.02 270);
+    --chip: oklch(27% 0.02 270);
+  }
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-grow: 1;
+  font-weight: 700;
+  font-size: 18px;
+}
+
+.logo {
+  width: 26px;
+  height: 26px;
+  border-radius: continuous;
+  border-radius: 8px;
+  corner-shape: squircle;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+}
+
+.badge {
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--chip);
+  color: var(--muted);
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 10px;
+  background: var(--chip);
+}
+
+button {
+  background: var(--chip);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 7px 14px;
+  font-weight: 500;
+
+  &:hover { background: var(--line); }
+  &.primary {
+    background: var(--accent);
+    color: white;
+    &:hover { background: oklch(56% 0.2 275); }
+  }
+  &.ghost { background: transparent; border: 1px solid var(--line); }
+  &.tab { background: transparent; color: var(--muted); }
+  &.tab.active { background: var(--panel); color: var(--text); box-shadow: 0 1px 3px rgb(0 0 0 / 0.2); }
+}
+
+.content {
+  flex-grow: 1;
+  padding: 28px 32px;
+}
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  max-width: 1100px;
+}
+
+.hero {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  h1 { font-size: 30px; letter-spacing: -0.5px; }
+  p { max-width: 640px; line-height: 1.5; }
+}
+
+.muted { color: var(--muted); font-size: 14px; }
+
+code {
+  color: var(--accent-2);
+}
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.stat-value { font-weight: 600; font-size: 17px; }
+
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.4fr;
+  gap: 16px;
+}
+
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 18px 20px;
+  border-radius: 16px;
+  corner-shape: squircle;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.08);
+}
+
+.label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  color: var(--muted);
+}
+
+.big {
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -1px;
+}
+
+.row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+input {
+  flex-grow: 1;
+  background: var(--bg);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  &:focus { border-color: var(--accent); }
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.todo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--chip);
+  &:hover { background: var(--line); }
+  &.done { color: var(--muted); }
+  &.done .check { background: var(--accent); color: white; border-color: var(--accent); }
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1.5px solid var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.bench {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.result { font-size: 18px; font-weight: 600; color: var(--accent); }
+
+.cells {
+  display: grid;
+  grid-template-columns: repeat(25, 1fr);
+  gap: 3px;
+}
+
+.cell {
+  display: flex;
+  justify-content: center;
+  padding: 3px 0;
+  font-size: 11px;
+  border-radius: 4px;
+  background: var(--chip);
+  color: var(--muted);
+  &.hot { background: oklch(62% 0.2 275 / 0.25); color: var(--text); }
+}
+

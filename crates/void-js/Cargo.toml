@@ -1,0 +1,11 @@
+[package]
+name = "void-js"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+void-dom.workspace = true
+void-css.workspace = true
+rquickjs.workspace = true
+oxc.workspace = true

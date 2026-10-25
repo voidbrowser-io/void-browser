@@ -1,0 +1,11 @@
+[package]
+name = "void-layout"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+void-dom.workspace = true
+void-css.workspace = true
+taffy.workspace = true
+parley.workspace = true

@@ -1,0 +1,11 @@
+{
+  "name": "void",
+  "private": true,
+  "license": "MIT OR Apache-2.0",
+  "packageManager": "pnpm@10.18.0",
+  "scripts": {
+    "void": "cargo run -p void-browser --release -- apps/web-void/src/main.tsx",
+    "react": "pnpm --filter web-react dev",
+    "build:react": "pnpm --filter web-react build"
+  }
+}

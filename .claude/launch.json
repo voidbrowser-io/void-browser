@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web-react",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "pnpm@10.18.0", "--filter", "web-react", "exec", "vite", "--port", "5173", "--strictPort"],
+      "port": 5173
+    }
+  ]
+}

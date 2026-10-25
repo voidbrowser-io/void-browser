@@ -1,0 +1,22 @@
+[package]
+name = "void-browser"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "void"
+path = "src/main.rs"
+
+[dependencies]
+void-dom.workspace = true
+void-css.workspace = true
+void-layout.workspace = true
+void-paint.workspace = true
+void-js.workspace = true
+vello.workspace = true
+parley.workspace = true
+winit.workspace = true
+notify.workspace = true
+pollster.workspace = true
+png = "0.18"

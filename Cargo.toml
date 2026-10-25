@@ -1,0 +1,36 @@
+[workspace]
+members = ["crates/*", "apps/browser"]
+resolver = "2"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["Artem Sdobnikov"]
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/voidbrowser/void"
+
+[workspace.dependencies]
+void-dom = { path = "crates/void-dom" }
+void-css = { path = "crates/void-css" }
+void-layout = { path = "crates/void-layout" }
+void-paint = { path = "crates/void-paint" }
+void-js = { path = "crates/void-js" }
+
+vello = "0.11"
+parley = "0.12"
+taffy = "0.15"
+rquickjs = { version = "0.14", features = ["loader"] }
+oxc = { version = "0.155", features = ["transformer", "semantic", "codegen"] }
+winit = "0.30"
+notify = "8"
+pollster = "0.4"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = "thin"
+strip = true

@@ -1,0 +1,13 @@
+[package]
+name = "void-paint"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+void-dom.workspace = true
+void-css.workspace = true
+void-layout.workspace = true
+vello.workspace = true
+parley.workspace = true
+taffy.workspace = true
