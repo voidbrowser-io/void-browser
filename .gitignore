@@ -4,3 +4,5 @@ dist/
 *.png
 !docs/**/*.png
 .DS_Store
+!apps/browser/icons/*.png
+/dist

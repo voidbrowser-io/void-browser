@@ -1,4 +1,5 @@
 //! Void Browser — a modern-only web runtime for Windows.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 //!
 //! usage: void [url-or-path] [--auto "click 120 80; wait 200; type hi; key Enter; shot out.png; quit"]
 
@@ -48,12 +49,16 @@ enum Area {
 #[derive(Debug, Clone)]
 enum Step {
     Click(f64, f64),
+    ClickText(String),
     Move(f64, f64),
     Type(String),
     Key(String),
     Nav(String),
     Wait(u64),
     Shot(PathBuf),
+    Expect(String),
+    ExpectTitle(String),
+    ExpectTabs(usize),
     Quit,
 }
 
@@ -65,6 +70,10 @@ fn parse_script(src: &str) -> VecDeque<Step> {
             let nums: Vec<f64> = rest.split_whitespace().filter_map(|n| n.parse().ok()).collect();
             Some(match op {
                 "click" => Step::Click(*nums.first()?, *nums.get(1)?),
+                "click-text" => Step::ClickText(rest.trim().to_string()),
+                "expect" => Step::Expect(rest.trim().to_string()),
+                "expect-title" => Step::ExpectTitle(rest.trim().to_string()),
+                "expect-tabs" => Step::ExpectTabs(*nums.first()? as usize),
                 "move" => Step::Move(*nums.first()?, *nums.get(1)?),
                 "type" => Step::Type(rest.to_string()),
                 "key" => Step::Key(rest.trim().to_string()),
@@ -98,6 +107,7 @@ fn parse_key(spec: &str) -> (ModifiersState, Key) {
             "left" => key = Key::Named(NamedKey::ArrowLeft),
             "right" => key = Key::Named(NamedKey::ArrowRight),
             "f5" => key = Key::Named(NamedKey::F5),
+            "space" => key = Key::Character(" ".into()),
             other => key = Key::Character(other.into()),
         }
     }
@@ -134,9 +144,20 @@ struct App {
     caret_at: Instant,
     reload_at: Option<Instant>,
     reload_dirs: Vec<PathBuf>,
+    /// An `--auto` check failed; exit with code 1.
+    failed: bool,
 }
 
 impl App {
+    fn check(&mut self, ok: bool, what: String) {
+        if ok {
+            println!("[void] ok   {what}");
+        } else {
+            eprintln!("[void] FAIL {what}");
+            self.failed = true;
+        }
+    }
+
     fn request_redraw(&self) {
         if let Some(w) = &self.window {
             w.request_redraw();
@@ -513,6 +534,30 @@ impl App {
             self.paint_scene();
             match step {
                 Step::Move(x, y) => self.move_to(Point::new(x, y)),
+                Step::ClickText(text) => {
+                    let content = self.tabs[self.active].find_text(&text).map(|p| Point::new(p.x, p.y + CHROME_H as f64));
+                    match content.or_else(|| self.chrome.find_text(&text)) {
+                        Some(p) => {
+                            self.move_to(p);
+                            self.mouse(ElementState::Pressed);
+                            self.mouse(ElementState::Released);
+                        }
+                        None => self.check(false, format!("click-text {text:?}: not found")),
+                    }
+                }
+                Step::Expect(text) => {
+                    self.paint_scene();
+                    let page = self.tabs[self.active].page_text();
+                    self.check(page.contains(&text), format!("expect {text:?}"));
+                }
+                Step::ExpectTitle(t) => {
+                    let title = self.tabs[self.active].title.clone();
+                    self.check(title == t, format!("expect-title {t:?} (got {title:?})"));
+                }
+                Step::ExpectTabs(n) => {
+                    let got = self.tabs.len();
+                    self.check(got == n, format!("expect-tabs {n} (got {got})"));
+                }
                 Step::Click(x, y) => {
                     self.move_to(Point::new(x, y));
                     self.mouse(ElementState::Pressed);
@@ -696,18 +741,23 @@ fn min_opt(a: Option<Instant>, b: Option<Instant>) -> Option<Instant> {
 
 /// Demo links for the new-tab page.
 fn host_info() -> String {
-    let mut demos = Vec::new();
+    let mut demos = vec![(
+        "Demo app · built in",
+        "The demo ships inside Void — works offline, no files needed.",
+        "void://demo".to_string(),
+    )];
+    // Running from the repo: offer the on-disk copy (hot reload) and the HTTP setup.
     if let Ok(p) = std::fs::canonicalize("apps/web-void/index.html") {
         let p = p.to_string_lossy().trim_start_matches(r"\\?\").to_string();
         if let Ok(u) = Url::from_file_path(p) {
             demos.push(("Demo app · local", "Plain .tsx from disk. Edit a file — it hot-reloads.", u.to_string()));
+            demos.push((
+                "Demo app · over HTTP",
+                "Run: python -m http.server 8080 -d apps/web-void",
+                "http://localhost:8080/".to_string(),
+            ));
         }
     }
-    demos.push((
-        "Demo app · over HTTP",
-        "Run: python -m http.server 8080 -d apps/web-void",
-        "http://localhost:8080/".to_string(),
-    ));
     let items: Vec<String> = demos
         .iter()
         .map(|(t, d, u)| format!("{{\"title\":{},\"desc\":{},\"url\":{}}}", json_str(t), json_str(d), json_str(u)))
@@ -758,6 +808,10 @@ fn main() {
         caret_at: Instant::now(),
         reload_at: None,
         reload_dirs: Vec::new(),
+        failed: false,
     };
     event_loop.run_app(&mut app).expect("run");
+    if app.failed {
+        std::process::exit(1);
+    }
 }

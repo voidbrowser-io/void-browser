@@ -210,13 +210,9 @@ impl Selector {
         if parts.is_empty() {
             return None;
         }
-        // Each compound stores the combinator that links it to the compound on its right.
-        let n = parts.len();
-        let mut linked = Vec::with_capacity(n);
-        for i in 0..n {
-            let comb = if i + 1 < n { parts[i + 1].1 } else { Comb::Descendant };
-            linked.push((parts[i].0.clone(), comb));
-        }
+        // Each compound keeps the combinator linking it to the compound on its
+        // left; matching walks right-to-left, so reverse.
+        let mut linked = parts;
         linked.reverse();
         let mut spec = (0, 0, 0);
         let mut uses_hover = false;

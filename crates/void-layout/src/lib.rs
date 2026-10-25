@@ -191,6 +191,10 @@ pub fn text_layout(
     let first = &runs[0].style;
     let mut b = lcx.ranged_builder(fcx, text, 1.0, true);
     b.push_default(StyleProperty::LineHeight(parley::style::LineHeight::FontSizeRelative(first.line_height)));
+    // Defaults from the first run, so an empty paragraph still measures with its own font.
+    b.push_default(StyleProperty::FontSize(first.font_size));
+    b.push_default(StyleProperty::FontWeight(FontWeight::new(first.font_weight)));
+    b.push_default(StyleProperty::FontFamily(FontFamily::Source(first.font_family.to_string().into())));
     for (r, range) in runs.iter().zip(ranges) {
         let range = range.start.min(text.len())..range.end.min(text.len());
         if range.is_empty() {

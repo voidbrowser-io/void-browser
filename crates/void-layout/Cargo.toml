@@ -9,3 +9,6 @@ void-dom.workspace = true
 void-css.workspace = true
 taffy.workspace = true
 parley.workspace = true
+
+[dev-dependencies]
+taffy.workspace = true

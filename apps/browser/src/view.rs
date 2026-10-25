@@ -56,7 +56,7 @@ impl View {
         self.frame = None;
         self.engine = None;
         self.hits.clear();
-        let privileged = self.url.scheme() == "void";
+        let privileged = pages::privileged(&self.url);
         let (engine, error) = match Engine::boot(&self.url, UA_CSS, pages::builtin, privileged, host_info.to_string()) {
             Ok(e) => (e, None),
             Err((e, msg)) => (e, Some(msg)),
@@ -317,6 +317,32 @@ impl View {
         dom.focus.map(|f| dom.nodes[f as usize].value.clone())
     }
 
+    /// All text on the page, plus the error message if the page failed.
+    pub fn page_text(&self) -> String {
+        let mut out = self.error.clone().unwrap_or_default();
+        if let Some(e) = &self.engine {
+            out.push_str(&text_of(&e.dom.borrow(), void_dom::ROOT));
+        }
+        out
+    }
+
+    /// Center of the smallest painted element whose text (or placeholder) is `text`.
+    pub fn find_text(&self, text: &str) -> Option<Point> {
+        let dom = self.engine.as_ref()?.dom.borrow();
+        self.hits
+            .iter()
+            .filter(|h| {
+                let node = &dom.nodes[h.id as usize];
+                let placeholder = match &node.kind {
+                    NodeKind::Element { attrs, .. } => attrs.get("placeholder").map(String::as_str),
+                    _ => None,
+                };
+                text_of(&dom, h.id).trim() == text || placeholder == Some(text)
+            })
+            .min_by(|a, b| a.rect.area().total_cmp(&b.rect.area()))
+            .map(|h| h.rect.center())
+    }
+
     pub fn take_cmds(&self) -> Vec<HostCmd> {
         self.engine.as_ref().map(|e| e.take_cmds()).unwrap_or_default()
     }
@@ -337,6 +363,13 @@ impl View {
             self.error = Some(e);
         }
         due
+    }
+}
+
+fn text_of(dom: &void_dom::Dom, id: NodeId) -> String {
+    match &dom.nodes[id as usize].kind {
+        NodeKind::Text(t) => t.clone(),
+        NodeKind::Element { .. } => dom.nodes[id as usize].children.iter().map(|&c| text_of(dom, c)).collect(),
     }
 }
 

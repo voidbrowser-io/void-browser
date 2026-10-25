@@ -11,3 +11,6 @@ rquickjs.workspace = true
 oxc.workspace = true
 ureq = "3"
 url = "2"
+
+[dev-dependencies]
+url = "2"

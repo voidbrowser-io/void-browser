@@ -1,5 +1,6 @@
 [package]
 name = "void-browser"
+description = "Void — a modern-only web browser"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -22,3 +23,23 @@ pollster.workspace = true
 png = "0.18"
 url = "2"
 arboard = "3"
+
+[build-dependencies]
+winresource = "0.1"
+
+# Windows installer: `cargo packager -p void-browser --release`
+[package.metadata.packager]
+productName = "Void"
+identifier = "io.voidbrowser.void"
+publisher = "Void contributors"
+homepage = "https://github.com/voidbrowser-io/void-browser"
+description = "A modern-only web browser: TSX without a bundler, signals, GPU rendering."
+outDir = "../../dist"
+beforePackagingCommand = "cargo build -p void-browser --release"
+formats = ["nsis"]
+icons = ["icons/icon.ico", "icons/icon.png"]
+binaries = [{ path = "void", main = true }]
+
+[package.metadata.packager.nsis]
+installMode = "currentUser"
+installerIcon = "icons/icon.ico"

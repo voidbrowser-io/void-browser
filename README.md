@@ -103,6 +103,42 @@ void apps/web-void --auto "click 440 510; key ctrl+t; type localhost:8080; key e
 
 Scripted input and offscreen GPU screenshots, for tests and CI.
 
+## Tests
+
+```bash
+pnpm test        # everything: cargo test --workspace + web app tests
+cargo test -p void-css          # one crate
+cargo test -p void-browser --test e2e   # real window + GPU, driven by --auto
+```
+
+| Suite | What it covers |
+|---|---|
+| `void-dom` | tree operations, focus, event paths |
+| `void-css` | parsing, nesting, selectors, specificity, cascade, `var()`, `oklch()`, shorthands |
+| `void-layout` | flex, grid, border-box, inline text, blockification, nowrap, inputs |
+| `void-js` | TSX, URL loading, HTML entry, signals, `For`/`Show`, events, timers, privileges |
+| `void-browser` (e2e) | tabs, history, address bar, links, demo app, legacy refusal, GPU screenshots |
+| `web-react` | the React baseline (vitest + Testing Library) |
+
+E2E tests open a real window. On machines without a GPU, set `VOID_SKIP_E2E=1`.
+
+`--auto` scripts support `click x y`, `click-text <text>`, `type`, `key ctrl+t`,
+`nav <url>`, `wait <ms>`, `expect <text>`, `expect-title`, `expect-tabs <n>`,
+`shot <file.png>` and `quit`. A failed `expect` exits with code 1.
+
+## Windows installer
+
+```bash
+cargo install cargo-packager --locked   # once
+cargo packager -p void-browser --release
+```
+
+This produces `dist/Void_<version>_x64-setup.exe`: an NSIS installer
+(per-user, no admin rights) with a Start-menu shortcut and an uninstaller.
+The demo app is compiled into the binary as `void://demo`, so an installed
+copy works without the repo. CI builds the installer on every `v*` tag and
+attaches it to the GitHub release.
+
 ## License
 
 Licensed under either of [Apache License 2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option.

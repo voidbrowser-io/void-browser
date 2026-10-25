@@ -4,8 +4,11 @@
   "license": "MIT OR Apache-2.0",
   "packageManager": "pnpm@10.18.0",
   "scripts": {
-    "void": "cargo run -p void-browser --release -- apps/web-void/src/main.tsx",
+    "void": "cargo run -p void-browser --release",
     "react": "pnpm --filter web-react dev",
-    "build:react": "pnpm --filter web-react build"
+    "build:react": "pnpm --filter web-react build",
+    "test": "cargo test --workspace && pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "installer": "cargo packager -p void-browser --release"
   }
 }

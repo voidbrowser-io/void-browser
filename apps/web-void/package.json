@@ -5,9 +5,11 @@
   "type": "module",
   "description": "The same app as web-react, as plain .tsx files run directly by Void Browser. No bundler, no node_modules at runtime.",
   "scripts": {
-    "dev": "cargo run -p void-browser --release -- src/main.tsx"
+    "dev": "cargo run -p void-browser --release -- .",
+    "typecheck": "tsc -p ."
   },
   "devDependencies": {
-    "@void/types": "workspace:*"
+    "@void/types": "workspace:*",
+    "typescript": "^5.9.3"
   }
 }

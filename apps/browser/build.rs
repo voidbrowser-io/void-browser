@@ -1,0 +1,14 @@
+fn main() {
+    println!("cargo:rerun-if-changed=icons/icon.ico");
+    println!("cargo:rerun-if-changed=pages");
+    println!("cargo:rerun-if-changed=../web-void");
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("windows") {
+        let mut res = winresource::WindowsResource::new();
+        res.set_icon("icons/icon.ico");
+        res.set("ProductName", "Void");
+        res.set("FileDescription", "Void Browser");
+        if let Err(e) = res.compile() {
+            println!("cargo:warning=could not embed icon: {e}");
+        }
+    }
+}
