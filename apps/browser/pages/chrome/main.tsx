@@ -3,10 +3,10 @@ import { signal, render, focus } from "void";
 import "./chrome.css";
 
 type Tab = { title: string; url: string; error: boolean };
-type State = { tabs: Tab[]; active: number; canBack: boolean; canForward: boolean };
+type State = { tabs: Tab[]; active: number; canBack: boolean; canForward: boolean; zoom: number };
 
 const browser = (globalThis as any).__browser;
-const state = signal<State>({ tabs: [], active: 0, canBack: false, canForward: false });
+const state = signal<State>({ tabs: [], active: 0, canBack: false, canForward: false, zoom: 100 });
 let urlInput: unknown = null;
 
 // The Rust host pushes state here and asks for address-bar focus (Ctrl+L).
@@ -53,6 +53,7 @@ function Toolbar() {
         value={() => current()?.url ?? ""}
         onKeyDown={(e: any) => e.key === "Enter" && browser.navigate(e.value)}
       />
+      {() => (state().zoom !== 100 ? <div class="zoom">{state().zoom}%</div> : null)}
       <div class="badge">Void</div>
     </div>
   );

@@ -15,24 +15,27 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use url::Url;
-use vello::kurbo::{Affine, Point, Rect};
+use vello::kurbo::{Affine, Point, Rect, Vec2};
 use vello::peniko::{BlendMode, Color, Fill};
 use vello::util::{RenderContext, RenderSurface};
 use vello::{AaConfig, AaSupport, RenderParams, Renderer, RendererOptions, Scene};
-use view::View;
+use view::{ScrollAmount, View};
 use void_dom::NodeId;
 use void_js::{parse_input, HostCmd};
 use void_layout::TextBrush;
 use winit::application::ApplicationHandler;
-use winit::event::{ElementState, MouseButton, WindowEvent};
+use winit::event::{ElementState, MouseButton, MouseScrollDelta, WindowEvent};
 use winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop, EventLoopProxy};
 use winit::keyboard::{Key, ModifiersState, NamedKey};
+use winit::platform::modifier_supplement::KeyEventExtModifierSupplement;
 use winit::window::{CursorIcon, Window, WindowId};
 
 const CARET_BLINK: Duration = Duration::from_millis(530);
 /// Height of the browser UI (tab strip + toolbar), in CSS pixels.
 const CHROME_H: f32 = 84.0;
 const NEW_TAB: &str = "void://newtab";
+/// One mouse-wheel notch, in CSS pixels.
+const WHEEL_LINE: f64 = 48.0;
 
 #[derive(Debug)]
 enum UserEvent {
@@ -54,6 +57,17 @@ enum Step {
     Type(String),
     Key(String),
     Nav(String),
+    /// Mouse wheel at (x, y); positive `dy` scrolls the page down. Optional `ctrl`/`shift`.
+    Scroll(f64, f64, f64, ModifiersState),
+    /// `scroll-on <text> | <dy> [ctrl|shift]`: wheel over the element showing <text>.
+    ScrollOn(String, f64, ModifiersState),
+    /// Move the pointer over the element showing <text>.
+    MoveOn(String),
+    /// Print where <text> is, in window coordinates (for writing tests).
+    Where(String),
+    ExpectZoom(u32),
+    /// The text is on the page but not visible (scrolled away or clipped).
+    ExpectHidden(String),
     Wait(u64),
     Shot(PathBuf),
     Expect(String),
@@ -78,6 +92,16 @@ fn parse_script(src: &str) -> VecDeque<Step> {
                 "type" => Step::Type(rest.to_string()),
                 "key" => Step::Key(rest.trim().to_string()),
                 "nav" => Step::Nav(rest.trim().to_string()),
+                "scroll" => Step::Scroll(*nums.first()?, *nums.get(1)?, *nums.get(2)?, parse_mods(rest)),
+                "scroll-on" => {
+                    let (text, tail) = rest.split_once('|')?;
+                    let dy = tail.split_whitespace().next()?.parse().ok()?;
+                    Step::ScrollOn(text.trim().to_string(), dy, parse_mods(tail))
+                }
+                "move-on" => Step::MoveOn(rest.trim().to_string()),
+                "where" => Step::Where(rest.trim().to_string()),
+                "expect-zoom" => Step::ExpectZoom(*nums.first()? as u32),
+                "expect-hidden" => Step::ExpectHidden(rest.trim().to_string()),
                 "wait" => Step::Wait(*nums.first()? as u64),
                 "shot" => Step::Shot(PathBuf::from(rest.trim())),
                 "quit" => Step::Quit,
@@ -89,6 +113,20 @@ fn parse_script(src: &str) -> VecDeque<Step> {
             })
         })
         .collect()
+}
+
+/// Modifier words anywhere in a step: `ctrl`, `shift`, `alt`.
+fn parse_mods(s: &str) -> ModifiersState {
+    let mut m = ModifiersState::empty();
+    for w in s.split_whitespace() {
+        match w {
+            "ctrl" => m |= ModifiersState::CONTROL,
+            "shift" => m |= ModifiersState::SHIFT,
+            "alt" => m |= ModifiersState::ALT,
+            _ => {}
+        }
+    }
+    m
 }
 
 /// "ctrl+shift+t" → (modifiers, key)
@@ -107,7 +145,15 @@ fn parse_key(spec: &str) -> (ModifiersState, Key) {
             "left" => key = Key::Named(NamedKey::ArrowLeft),
             "right" => key = Key::Named(NamedKey::ArrowRight),
             "f5" => key = Key::Named(NamedKey::F5),
-            "space" => key = Key::Character(" ".into()),
+            "up" => key = Key::Named(NamedKey::ArrowUp),
+            "down" => key = Key::Named(NamedKey::ArrowDown),
+            "pageup" => key = Key::Named(NamedKey::PageUp),
+            "pagedown" => key = Key::Named(NamedKey::PageDown),
+            "home" => key = Key::Named(NamedKey::Home),
+            "end" => key = Key::Named(NamedKey::End),
+            "plus" => key = Key::Character("=".into()),
+            "minus" => key = Key::Character("-".into()),
+            "space" => key = Key::Named(NamedKey::Space),
             other => key = Key::Character(other.into()),
         }
     }
@@ -182,7 +228,8 @@ impl App {
         if p.y < CHROME_H as f64 {
             (Area::Chrome, p)
         } else {
-            (Area::Content, Point::new(p.x, p.y - CHROME_H as f64))
+            let zoom = self.tabs.get(self.active).map(|t| t.zoom).unwrap_or(1.0);
+            (Area::Content, Point::new(p.x / zoom, (p.y - CHROME_H as f64) / zoom))
         }
     }
 
@@ -291,10 +338,11 @@ impl App {
             ));
         }
         json.push_str(&format!(
-            "],\"active\":{},\"canBack\":{},\"canForward\":{}}}",
+            "],\"active\":{},\"canBack\":{},\"canForward\":{},\"zoom\":{}}}",
             self.active,
             !tab.back.is_empty(),
-            !tab.forward.is_empty()
+            !tab.forward.is_empty(),
+            (tab.zoom * 100.0).round()
         ));
         self.chrome.call("__browser_state", &json);
         if let Some(w) = &self.window {
@@ -363,13 +411,16 @@ impl App {
         self.scene.reset();
         let base = Affine::scale(scale);
         // Content first, clipped below the browser UI.
-        let content_t = base * Affine::translate((0.0, CHROME_H as f64));
-        let clip = Rect::new(0.0, 0.0, w as f64, (h - CHROME_H).max(0.0) as f64);
+        // Page zoom scales the content's CSS pixels; layout sees a smaller/larger viewport.
+        let zoom = self.tabs[self.active].zoom;
+        let content_t = base * Affine::translate((0.0, CHROME_H as f64)) * Affine::scale(zoom);
+        let size = ((w as f64 / zoom) as f32, ((h - CHROME_H).max(1.0) as f64 / zoom) as f32);
+        let clip = Rect::new(0.0, 0.0, size.0 as f64, size.1 as f64);
         self.scene.push_layer(Fill::NonZero, BlendMode::default(), 1.0, content_t, &clip);
         let caret = self.caret_on;
         let focus = self.focus;
         let tab = &mut self.tabs[self.active];
-        tab.paint(&mut self.scene, &mut self.fcx, &mut self.lcx, content_t, (w, (h - CHROME_H).max(1.0)), caret && focus == Area::Content);
+        tab.paint(&mut self.scene, &mut self.fcx, &mut self.lcx, content_t, size, caret && focus == Area::Content);
         self.scene.pop_layer();
         self.chrome.paint(&mut self.scene, &mut self.fcx, &mut self.lcx, base, (w, CHROME_H), caret && focus == Area::Chrome);
     }
@@ -429,6 +480,47 @@ impl App {
         }
     }
 
+    /// Mouse wheel: Ctrl zooms, Shift scrolls sideways, otherwise scroll what is under the cursor.
+    fn wheel(&mut self, dx: f64, dy: f64) {
+        if self.mods.control_key() {
+            if dy != 0.0 {
+                self.zoom(if dy > 0.0 { 1 } else { -1 });
+            }
+            return;
+        }
+        let (dx, dy) = if self.mods.shift_key() && dx == 0.0 { (dy, 0.0) } else { (dx, dy) };
+        let (area, local) = self.area_at(self.cursor);
+        let zoom = if area == Area::Content { self.tabs[self.active].zoom } else { 1.0 };
+        if self.view(area).scroll_by(Some(local), ScrollAmount::Px(Vec2::new(-dx / zoom, -dy / zoom))) {
+            self.after_scroll();
+        }
+    }
+
+    /// Scrolling moves content under a still pointer: refresh hit boxes and hover.
+    fn after_scroll(&mut self) {
+        self.paint_scene();
+        let c = self.cursor;
+        self.move_to(c);
+        self.request_redraw();
+    }
+
+    /// `dir`: +1 zoom in, -1 zoom out, 0 reset. Per tab.
+    fn zoom(&mut self, dir: i32) {
+        self.tabs[self.active].zoom_step(dir);
+        self.sync_chrome();
+        // Zoom moves content under a still pointer, just like scrolling.
+        self.after_scroll();
+    }
+
+    /// Window position of the element showing `text` (page first, then browser UI).
+    fn locate(&self, text: &str) -> Option<Point> {
+        let tab = &self.tabs[self.active];
+        let zoom = tab.zoom;
+        tab.find_text(text)
+            .map(|p| Point::new(p.x * zoom, p.y * zoom + CHROME_H as f64))
+            .or_else(|| self.chrome.find_text(text))
+    }
+
     fn mouse(&mut self, state: ElementState) {
         let (area, local) = self.area_at(self.cursor);
         let hit = self.view(area).hit(local);
@@ -461,9 +553,11 @@ impl App {
         self.request_redraw();
     }
 
-    fn on_key(&mut self, key: &Key, text: Option<&str>, mods: ModifiersState) {
+    /// `plain` is the key without modifiers: with Ctrl held, Windows reports
+    /// control characters ("\u{16}" for Ctrl+V) as the logical key.
+    fn on_key(&mut self, key: &Key, plain: &Key, text: Option<&str>, mods: ModifiersState) {
         let ctrl = mods.control_key();
-        let ch = match key {
+        let ch = match plain {
             Key::Character(c) => c.to_lowercase(),
             _ => String::new(),
         };
@@ -492,7 +586,10 @@ impl App {
                 self.tabs[self.active].go_forward(&self.host_info);
                 return self.sync_chrome();
             }
-            (_, true, _, d) if d.len() == 1 && d.as_bytes()[0].is_ascii_digit() && d != "0" => {
+            (_, true, _, "=" | "+") => return self.zoom(1),
+            (_, true, _, "-") => return self.zoom(-1),
+            (_, true, _, "0") => return self.zoom(0),
+            (_, true, _, d) if d.len() == 1 && d.as_bytes()[0].is_ascii_digit() => {
                 let n: usize = d.parse().unwrap();
                 return self.activate(if n == 9 { self.tabs.len() - 1 } else { n - 1 });
             }
@@ -514,8 +611,13 @@ impl App {
                 }
                 _ => {}
             }
-        } else {
-            self.view(area).key(key, text);
+        } else if self.view(area).key(key, text) {
+            // Default action: scroll the page (target the scroller under the pointer).
+            let (over, local) = self.area_at(self.cursor);
+            let at = (over == Area::Content).then_some(local);
+            if self.tabs[self.active].scroll_key(key, mods.shift_key(), at) {
+                self.after_scroll();
+            }
         }
         self.caret_on = true;
         self.caret_at = Instant::now();
@@ -535,8 +637,7 @@ impl App {
             match step {
                 Step::Move(x, y) => self.move_to(Point::new(x, y)),
                 Step::ClickText(text) => {
-                    let content = self.tabs[self.active].find_text(&text).map(|p| Point::new(p.x, p.y + CHROME_H as f64));
-                    match content.or_else(|| self.chrome.find_text(&text)) {
+                    match self.locate(&text) {
                         Some(p) => {
                             self.move_to(p);
                             self.mouse(ElementState::Pressed);
@@ -566,14 +667,55 @@ impl App {
                 Step::Type(text) => {
                     for ch in text.chars() {
                         let s = ch.to_string();
-                        self.on_key(&Key::Character(s.as_str().into()), Some(&s), ModifiersState::empty());
+                        let k = Key::Character(s.as_str().into());
+                        self.on_key(&k, &k, Some(&s), ModifiersState::empty());
                     }
                 }
                 Step::Key(spec) => {
                     let (mods, key) = parse_key(&spec);
-                    self.on_key(&key, None, mods);
+                    // Reproduce Windows: with Ctrl held, the logical key of a letter is a
+                    // control character (Ctrl+V → "\u{16}"); only the modifier-free key is "v".
+                    let logical = match &key {
+                        Key::Character(c) if mods.control_key() && c.len() == 1 && c.as_bytes()[0].is_ascii_alphabetic() => {
+                            let ctl = (c.as_bytes()[0].to_ascii_lowercase() - b'a' + 1) as char;
+                            Key::Character(ctl.to_string().as_str().into())
+                        }
+                        _ => key.clone(),
+                    };
+                    let mods_before = std::mem::replace(&mut self.mods, mods);
+                    self.on_key(&logical, &key, None, mods);
+                    self.mods = mods_before;
                 }
                 Step::Nav(url) => self.navigate(&url),
+                Step::Scroll(x, y, dy, mods) => {
+                    self.move_to(Point::new(x, y));
+                    let before = std::mem::replace(&mut self.mods, mods);
+                    self.wheel(0.0, -dy);
+                    self.mods = before;
+                }
+                Step::ScrollOn(text, dy, mods) => match self.locate(&text) {
+                    Some(p) => {
+                        self.move_to(p);
+                        let before = std::mem::replace(&mut self.mods, mods);
+                        self.wheel(0.0, -dy);
+                        self.mods = before;
+                    }
+                    None => self.check(false, format!("scroll-on {text:?}: not found")),
+                },
+                Step::MoveOn(text) => match self.locate(&text) {
+                    Some(p) => self.move_to(p),
+                    None => self.check(false, format!("move-on {text:?}: not found")),
+                },
+                Step::Where(text) => println!("[void] where {text:?} = {:?}", self.locate(&text)),
+                Step::ExpectHidden(text) => {
+                    let tab = &self.tabs[self.active];
+                    let ok = tab.page_text().contains(&text) && tab.find_text(&text).is_none();
+                    self.check(ok, format!("expect-hidden {text:?}"));
+                }
+                Step::ExpectZoom(pct) => {
+                    let got = (self.tabs[self.active].zoom * 100.0).round() as u32;
+                    self.check(got == pct, format!("expect-zoom {pct} (got {got})"));
+                }
                 Step::Wait(ms) => self.script_at = Instant::now() + Duration::from_millis(ms),
                 Step::Shot(path) => {
                     self.paint_scene();
@@ -680,14 +822,25 @@ impl ApplicationHandler<UserEvent> for App {
             }
             WindowEvent::MouseInput { state, button: MouseButton::Left, .. } => self.mouse(state),
             WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Back, .. } => {
-                self.on_key(&Key::Named(NamedKey::ArrowLeft), None, ModifiersState::ALT)
+                let k = Key::Named(NamedKey::ArrowLeft);
+                self.on_key(&k, &k, None, ModifiersState::ALT)
             }
             WindowEvent::MouseInput { state: ElementState::Pressed, button: MouseButton::Forward, .. } => {
-                self.on_key(&Key::Named(NamedKey::ArrowRight), None, ModifiersState::ALT)
+                let k = Key::Named(NamedKey::ArrowRight);
+                self.on_key(&k, &k, None, ModifiersState::ALT)
             }
             WindowEvent::KeyboardInput { event, .. } if event.state == ElementState::Pressed => {
                 let mods = self.mods;
-                self.on_key(&event.logical_key, event.text.as_deref(), mods);
+                let plain = event.key_without_modifiers();
+                self.on_key(&event.logical_key, &plain, event.text.as_deref(), mods);
+            }
+            WindowEvent::MouseWheel { delta, .. } => {
+                let scale = self.window.as_ref().map(|w| w.scale_factor()).unwrap_or(1.0);
+                let (dx, dy) = match delta {
+                    MouseScrollDelta::LineDelta(x, y) => (x as f64 * WHEEL_LINE, y as f64 * WHEEL_LINE),
+                    MouseScrollDelta::PixelDelta(p) => (p.x / scale, p.y / scale),
+                };
+                self.wheel(dx, dy);
             }
             _ => {}
         }

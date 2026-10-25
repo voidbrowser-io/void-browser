@@ -113,3 +113,141 @@ fn built_in_demo_works_without_files() {
          key ctrl+l; type void://nope; key enter; expect no such page",
     );
 }
+
+/// A page taller than the window: an input, a scrollable list that can shrink
+/// and grow, a horizontally scrolling strip, and many rows.
+fn long_page() -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("void-e2e-scroll-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("main.tsx"),
+        r#"import { render, signal } from 'void';
+import './page.css';
+const msg = signal('none');
+const n = signal(30);
+render(() => (
+  <div class="page">
+    <h1>Top of page</h1>
+    <div class="row-flex">
+      <input placeholder="Type here" />
+      <button onClick={() => n.set(2)}>Shrink</button>
+      <button onClick={() => n.set(30)}>Grow</button>
+    </div>
+    <div class="inner">
+      {() => Array.from({ length: n() }, (_, i) => <p>Inner {i}</p>)}
+      <button onClick={() => msg.set('inner bottom')}>Inner bottom</button>
+    </div>
+    <div class="wide">
+      <div class="track">
+        <span>Wide start</span>
+        <button onClick={() => msg.set('far right')}>Far right</button>
+      </div>
+    </div>
+    {Array.from({ length: 60 }, (_, i) => <p class="row">Row {i}</p>)}
+    <button onClick={() => msg.set('page bottom')}>Page bottom</button>
+    <p>clicked: {msg}</p>
+  </div>
+));
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        dir.join("page.css"),
+        ".page { padding: 20px } h1 { height: 40px } .row { height: 30px }
+         .row-flex { display: flex; gap: 8px; margin-bottom: 8px }
+         .inner { height: 150px; width: 300px; overflow-y: auto; border: 1px solid gray }
+         .wide { width: 300px; overflow-x: auto; margin-top: 8px }
+         .track { display: flex; justify-content: space-between; width: 1200px; white-space: nowrap }",
+    )
+    .unwrap();
+    dir.join("main.tsx")
+}
+
+#[test]
+fn wheel_scrolls_nested_boxes_then_chains_to_the_page() {
+    if skip() {
+        return;
+    }
+    let page = long_page();
+    run(
+        &[page.to_str().unwrap()],
+        "expect-hidden Page bottom; expect-hidden Inner bottom; \
+         scroll-on Inner 0 | 3000; click-text Inner bottom; expect clicked: inner bottom; \
+         click-text Top of page; \
+         scroll-on Inner bottom | 300; expect-hidden Top of page; \
+         scroll-on Row 10 | 5000; click-text Page bottom; expect clicked: page bottom; \
+         scroll-on Page bottom | -100000; click-text Top of page",
+    );
+}
+
+#[test]
+fn shift_wheel_scrolls_sideways_and_ctrl_wheel_zooms() {
+    if skip() {
+        return;
+    }
+    let page = long_page();
+    run(
+        &[page.to_str().unwrap()],
+        "expect-hidden Far right; scroll-on Wide start | 2000 shift; click-text Far right; expect clicked: far right; \
+         click-text Top of page; \
+         scroll-on Top of page | -100 ctrl; expect-zoom 110; scroll-on Top of page | 100 ctrl; expect-zoom 100",
+    );
+}
+
+#[test]
+fn keyboard_scrolls_what_is_under_the_pointer() {
+    if skip() {
+        return;
+    }
+    let page = long_page();
+    run(
+        &[page.to_str().unwrap()],
+        // Pointer over the browser UI: keys scroll the page.
+        "key end; click-text Page bottom; expect-hidden Top of page; \
+         key home; click-text Top of page; \
+         key pagedown; expect-hidden Top of page; key pageup; click-text Top of page; \
+         key space; expect-hidden Top of page; key home; \
+         move-on Inner 0; key end; click-text Inner bottom; click-text Top of page; \
+         click-text Type here; key space; key pagedown; click-text Top of page",
+    );
+}
+
+#[test]
+fn scroll_offset_resets_when_content_stops_overflowing() {
+    if skip() {
+        return;
+    }
+    let page = long_page();
+    run(
+        &[page.to_str().unwrap()],
+        "scroll-on Inner 0 | 3000; expect-hidden Inner 0; \
+         click-text Shrink; click-text Grow; click-text Inner 0",
+    );
+}
+
+#[test]
+fn zoom_is_per_tab_and_hit_testing_follows_it() {
+    if skip() {
+        return;
+    }
+    // "+1" is at (130, 558.5) at 100%: page y 474.5 below the 84px browser UI.
+    // At 110% it must be at (143, 84 + 474.5 × 1.1 ≈ 606). If zoom were ignored
+    // for hit testing, this click would land 47px below the button.
+    run(
+        &["apps/web-void"],
+        "key ctrl+plus; expect-zoom 110; click 143 606; expect double = 2; \
+         key ctrl+plus; key ctrl+plus; expect-zoom 150; click-text +1; expect double = 4; \
+         key ctrl+minus; expect-zoom 125; \
+         key ctrl+t; expect-zoom 100; key ctrl+w; expect-zoom 125; \
+         key ctrl+0; expect-zoom 100",
+    );
+}
+
+#[test]
+fn ctrl_shortcuts_work_with_windows_control_characters() {
+    if skip() {
+        return;
+    }
+    // `key ctrl+t` sends "\u{14}" as the logical key, like Windows does.
+    run(&[], "key ctrl+t; expect-tabs 2; key ctrl+w; expect-tabs 1; key ctrl+l; type void://demo; key enter; expect-title Void Demo");
+}

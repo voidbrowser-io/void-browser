@@ -49,8 +49,12 @@ Never click on the real desktop. Drive the browser with `--auto`:
 target/debug/void.exe apps/web-void --auto "click-text +1; expect double = 2; shot out.png; quit"
 ```
 
-Steps: `click x y`, `click-text <text>`, `move`, `type`, `key ctrl+t`, `nav <url>`,
-`wait <ms>`, `expect <text>`, `expect-title`, `expect-tabs <n>`, `shot <png>`, `quit`.
+Steps: `click x y`, `click-text <text>`, `move x y`, `move-on <text>`, `type`, `key ctrl+t`,
+`nav <url>`, `scroll x y dy [ctrl|shift]` (positive dy = down), `scroll-on <text> | <dy> [ctrl|shift]`,
+`wait <ms>`, `expect <text>`, `expect-title`, `expect-tabs <n>`, `expect-zoom <percent>`,
+`expect-hidden <text>` (on the page, not visible), `where <text>` (prints window position),
+`shot <png>`, `quit`. `key` also takes `up`, `down`, `pageup`, `pagedown`, `home`, `end`,
+`space`, `plus`, `minus`; `key ctrl+<letter>` sends the Windows control character as the key.
 A failed `expect` exits with code 1. Look at the PNG before claiming a visual change works.
 
 ## Conventions
@@ -60,6 +64,9 @@ A failed `expect` exits with code 1. Look at the PNG before claiming a visual ch
 - Library APIs (vello, parley, taffy, oxc, rquickjs) move fast. Read the source in
   `~/.cargo/registry/src/*/<crate>-<ver>/` instead of guessing signatures.
 - Keep JS in the engine to `runtime/void.js` and `prelude.js`; everything else is Rust.
+- Never edit source files through PowerShell `Get-Content`/`Set-Content`: Windows
+  PowerShell 5.1 reads UTF-8 as CP1251 and writes BOMs. Use the editor tools, or
+  Python with explicit UTF-8.
 - Commit messages: imperative subject, body explains why. End with the Co-Authored-By line.
 - Push only when asked. Remote is `git@github-void:voidbrowser-io/void-browser.git`
   (SSH host alias `github-void`; plain `github.com` is the user's work key — leave it alone).
@@ -68,11 +75,16 @@ A failed `expect` exits with code 1. Look at the PNG before claiming a visual ch
 
 Kept: flexbox, grid, block, inline text, CSS nesting, custom properties,
 `oklch()`/`rgb()`/`hsl()`, gradients, shadows, `:hover/:active/:focus/:first-child/:last-child`,
+`overflow`/`overflow-x`/`overflow-y` (`visible|clip|hidden|auto|scroll`, CSS Overflow 3
+axis rules; `clip` is not a scroll container; `void-root` is `overflow: auto`),
+overlay scrollbars, wheel/keyboard scrolling (repaint only, no relayout), per-tab zoom,
 ES modules, TSX/TS, signals.
 
 Dropped on purpose: floats, table layout, quirks mode, vendor prefixes,
 `document.write`, classic scripts, `var`-hoisting tricks, content-box, UA margins,
-legacy HTML pages (refused with an error page).
+legacy HTML pages (refused with an error page), scrollbar styling
+(`::-webkit-scrollbar`, `scrollbar-width`, `scrollbar-color`), scrollbars that take
+layout space, `body` → viewport overflow propagation.
 
 Before adding a web feature, check it against this list and the
 `void-architecture` skill. If it only exists for backwards compatibility, it does not go in.

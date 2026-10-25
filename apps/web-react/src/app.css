@@ -1,11 +1,11 @@
-﻿/* The legacy tax: every browser app needs a reset before modern CSS behaves.
+/* The legacy tax: every browser app needs a reset before modern CSS behaves.
    Void ships these defaults built in. */
 *, *::before, *::after { box-sizing: border-box; margin: 0; }
 html, body, #root { height: 100%; }
 body { font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
 button, input { font: inherit; border: none; cursor: pointer; }
 input { cursor: text; outline: none; }
-/* Void CSS: nesting, custom properties, oklch(), grid. No resets needed вЂ”
+/* Void CSS: nesting, custom properties, oklch(), grid. No resets needed —
    there is no legacy to reset. */
 
 .app {
@@ -20,7 +20,7 @@ input { cursor: text; outline: none; }
 
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 100%;
   background: var(--bg);
   color: var(--text);
 

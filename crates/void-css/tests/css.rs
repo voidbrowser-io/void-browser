@@ -217,3 +217,50 @@ fn display_none_hides() {
     let (dom, sheet, card, _) = tree(".card { display: none }");
     assert_eq!(cascade(&dom, &sheet).styles[&card].display, Display::None);
 }
+
+#[test]
+fn overflow_per_axis() {
+    use void_css::Overflow::*;
+    let (dom, sheet, card, span) = tree(".card { overflow: auto } span { overflow: hidden scroll; overflow-x: bogus }");
+    let styles = cascade(&dom, &sheet).styles;
+    assert_eq!((styles[&card].overflow_x, styles[&card].overflow_y), (Auto, Auto));
+    assert_eq!((styles[&span].overflow_x, styles[&span].overflow_y), (Hidden, Scroll), "unknown values are ignored");
+    assert!(styles[&card].clips() && styles[&card].overflow_y.scrolls());
+    assert_eq!(styles[&ROOT].overflow_y, Auto, "the page itself is a scroll container");
+}
+
+#[test]
+fn overflow_shorthand_ignores_invalid_shapes() {
+    use void_css::Overflow::*;
+    for bad in ["auto bogus", "hidden auto scroll", "bogus"] {
+        let (dom, sheet, card, _) = tree(&format!(".card {{ overflow: {bad} }}"));
+        let s = &cascade(&dom, &sheet).styles[&card];
+        assert_eq!((s.overflow_x, s.overflow_y), (Visible, Visible), "`overflow: {bad}` must be ignored");
+    }
+}
+
+#[test]
+fn clip_is_not_a_scroll_container() {
+    use void_css::Overflow::*;
+    let (dom, sheet, card, _) = tree(".card { overflow: clip }");
+    let s = &cascade(&dom, &sheet).styles[&card];
+    assert_eq!((s.overflow_x, s.overflow_y), (Clip, Clip));
+    assert!(s.clips() && !s.overflow_x.scrolls());
+}
+
+#[test]
+fn visible_axis_becomes_auto_next_to_a_scrolling_one() {
+    use void_css::Overflow::*;
+    let pairs = [
+        ("overflow-y: auto", (Auto, Auto)),
+        ("overflow-x: scroll", (Scroll, Auto)),
+        ("overflow-y: hidden", (Auto, Hidden)),
+        ("overflow-x: clip; overflow-y: auto", (Hidden, Auto)),
+        ("overflow-x: clip; overflow-y: visible", (Clip, Visible)),
+    ];
+    for (decl, want) in pairs {
+        let (dom, sheet, card, _) = tree(&format!(".card {{ {decl} }}"));
+        let s = &cascade(&dom, &sheet).styles[&card];
+        assert_eq!((s.overflow_x, s.overflow_y), want, "{decl}");
+    }
+}

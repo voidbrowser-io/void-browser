@@ -1,6 +1,6 @@
 //! Layout: Void styles → Taffy (flex / grid / block) with Parley text leaves.
 
-use void_css::{Cascade, Display, Len, Style, Track};
+use void_css::{Cascade, Display, Len, Overflow, Style, Track};
 use void_dom::{Dom, NodeId, NodeKind, ROOT};
 use parley::{FontContext, Layout, LayoutContext};
 use std::collections::HashMap;
@@ -284,6 +284,15 @@ fn justify(v: &Option<String>) -> Option<JustifyContent> {
     })
 }
 
+fn overflow(o: Overflow) -> taffy::Overflow {
+    match o {
+        Overflow::Visible => taffy::Overflow::Visible,
+        Overflow::Clip => taffy::Overflow::Clip,
+        Overflow::Hidden => taffy::Overflow::Hidden,
+        Overflow::Auto | Overflow::Scroll => taffy::Overflow::Scroll,
+    }
+}
+
 fn to_taffy(s: &Style) -> taffy::Style {
     let rect = |v: [Len; 4], f: fn(Len) -> LengthPercentage| taffy::Rect { top: f(v[0]), right: f(v[1]), bottom: f(v[2]), left: f(v[3]) };
     taffy::Style {
@@ -294,6 +303,9 @@ fn to_taffy(s: &Style) -> taffy::Style {
             Display::Block | Display::Inline => taffy::Display::Block,
         },
         box_sizing: taffy::BoxSizing::BorderBox,
+        overflow: taffy::Point { x: overflow(s.overflow_x), y: overflow(s.overflow_y) },
+        // Overlay scrollbars: they never take layout space.
+        scrollbar_width: 0.0,
         position: if s.absolute { Position::Absolute } else { Position::Relative },
         inset: taffy::Rect { top: lpa(s.inset[0]), right: lpa(s.inset[1]), bottom: lpa(s.inset[2]), left: lpa(s.inset[3]) },
         flex_direction: match s.flex_direction.as_str() {

@@ -1,4 +1,4 @@
-﻿//! Void CSS: modern-only subset. Nesting, custom properties, `:has`-free
+//! Void CSS: modern-only subset. Nesting, custom properties, `:has`-free
 //! selectors, flex/grid, `oklch()`, gradients and shadows. No floats, no
 //! tables, no quirks, no vendor prefixes, `box-sizing: border-box` always.
 
@@ -6,7 +6,7 @@ use void_dom::{Dom, NodeId, NodeKind, ROOT};
 use std::collections::HashMap;
 use std::rc::Rc;
 
-// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Stylesheet в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ───────────────────────────── Stylesheet ─────────────────────────────
 
 #[derive(Debug, Clone)]
 pub struct Rule {
@@ -21,7 +21,7 @@ pub struct Stylesheet {
 }
 
 pub const UA_CSS: &str = r#"
-void-root { display: block; width: 100%; height: 100%; }
+void-root { display: block; width: 100%; height: 100%; overflow: auto; }
 div, section, main, header, footer, nav, article, aside, ul, ol, li, p, form,
 h1, h2, h3, h4, h5, h6, pre { display: block; }
 span, b, strong, i, em, code, a, small, label { display: inline; }
@@ -165,7 +165,7 @@ fn resolve_nested(prelude: &str, parents: &[String]) -> Vec<String> {
     out
 }
 
-// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Selectors в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ───────────────────────────── Selectors ─────────────────────────────
 
 #[derive(Debug, Clone, Default)]
 pub struct Compound {
@@ -350,7 +350,7 @@ fn match_from(parts: &[(Compound, Comb)], dom: &Dom, id: NodeId) -> bool {
     }
 }
 
-// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Values в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ───────────────────────────── Values ─────────────────────────────
 
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Rgba {
@@ -392,6 +392,36 @@ pub enum Display {
     Flex,
     Grid,
     Inline,
+}
+
+/// `overflow` per axis. `auto` and `scroll` both make a scroll container;
+/// Void draws overlay scrollbars, so they never take layout space.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub enum Overflow {
+    #[default]
+    Visible,
+    /// Clips without being a scroll container.
+    Clip,
+    Hidden,
+    Auto,
+    Scroll,
+}
+
+impl Overflow {
+    fn parse(v: &str) -> Option<Overflow> {
+        Some(match v {
+            "visible" => Overflow::Visible,
+            "clip" => Overflow::Clip,
+            "hidden" => Overflow::Hidden,
+            "auto" => Overflow::Auto,
+            "scroll" => Overflow::Scroll,
+            _ => return None,
+        })
+    }
+
+    pub fn scrolls(self) -> bool {
+        matches!(self, Overflow::Auto | Overflow::Scroll)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -441,7 +471,8 @@ pub struct Style {
     pub background: Option<Background>,
     pub shadow: Option<Shadow>,
     pub opacity: f32,
-    pub overflow_hidden: bool,
+    pub overflow_x: Overflow,
+    pub overflow_y: Overflow,
     // Inherited
     pub color: Rgba,
     pub font_size: f32,
@@ -456,6 +487,11 @@ pub struct Style {
 }
 
 impl Style {
+    /// Content outside the padding box is clipped (hidden, auto or scroll).
+    pub fn clips(&self) -> bool {
+        self.overflow_x != Overflow::Visible || self.overflow_y != Overflow::Visible
+    }
+
     pub fn root() -> Style {
         Style {
             display: Display::Block,
@@ -489,7 +525,8 @@ impl Style {
             background: None,
             shadow: None,
             opacity: 1.0,
-            overflow_hidden: false,
+            overflow_x: Overflow::Visible,
+            overflow_y: Overflow::Visible,
             color: Rgba::rgb8(17, 17, 17),
             font_size: 16.0,
             font_weight: 400.0,
@@ -520,7 +557,7 @@ impl Style {
     }
 }
 
-// в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ Cascade в”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђв”Ђ
+// ───────────────────────────── Cascade ─────────────────────────────
 
 pub struct Cascade {
     pub styles: HashMap<NodeId, Style>,
@@ -585,7 +622,23 @@ fn compute_style(parent: &Style, decls: &[(String, String)]) -> Style {
         let v = resolve_vars(v, &s.custom);
         apply(&mut s, k, v.trim());
     }
+    normalize_overflow(&mut s);
     s
+}
+
+/// CSS Overflow 3: if one axis scrolls or hides, a `visible`/`clip` other axis
+/// computes to `auto`/`hidden` — otherwise wide content would be cut off with no
+/// way to reach it.
+fn normalize_overflow(s: &mut Style) {
+    let boxed = |o: Overflow| !matches!(o, Overflow::Visible | Overflow::Clip);
+    let fix = |axis: Overflow, other: Overflow| match axis {
+        Overflow::Visible if boxed(other) => Overflow::Auto,
+        Overflow::Clip if boxed(other) => Overflow::Hidden,
+        axis => axis,
+    };
+    let (x, y) = (s.overflow_x, s.overflow_y);
+    s.overflow_x = fix(x, y);
+    s.overflow_y = fix(y, x);
 }
 
 fn resolve_vars(v: &str, vars: &HashMap<String, String>) -> String {
@@ -779,7 +832,17 @@ fn apply(s: &mut Style, k: &str, v: &str) {
         "background" | "background-color" | "background-image" => s.background = parse_background(v, s.color),
         "box-shadow" => s.shadow = parse_shadow(v, fs, s.color),
         "opacity" => s.opacity = v.parse().unwrap_or(1.0),
-        "overflow" => s.overflow_hidden = v != "visible",
+        "overflow" => {
+            // One or two valid values; anything else is ignored, never guessed.
+            let parts: Vec<Option<Overflow>> = v.split_whitespace().map(Overflow::parse).collect();
+            match parts.as_slice() {
+                [Some(both)] => (s.overflow_x, s.overflow_y) = (*both, *both),
+                [Some(x), Some(y)] => (s.overflow_x, s.overflow_y) = (*x, *y),
+                _ => {}
+            }
+        }
+        "overflow-x" => s.overflow_x = Overflow::parse(v).unwrap_or(s.overflow_x),
+        "overflow-y" => s.overflow_y = Overflow::parse(v).unwrap_or(s.overflow_y),
         "color" => s.color = parse_color(v, s.color).unwrap_or(s.color),
         "font-weight" => {
             s.font_weight = match v {
@@ -899,7 +962,7 @@ fn parse_background(v: &str, current: Rgba) -> Option<Background> {
                     continue;
                 }
             }
-            // Ignore explicit stop positions вЂ” stops are evenly spaced.
+            // Ignore explicit stop positions — stops are evenly spaced.
             let color_part = split_top(a, ' ').into_iter().next().unwrap_or_default();
             if let Some(c) = parse_color(&color_part, current) {
                 stops.push(c);

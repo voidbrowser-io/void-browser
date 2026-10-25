@@ -191,3 +191,19 @@ fn input_gets_a_line_box_plus_padding() {
     let r = rect(&f, input).unwrap();
     assert!(r.h >= 40.0 - 0.5 && r.h < 50.0, "20px line + 2×10px padding, got {}", r.h);
 }
+
+#[test]
+fn scroll_containers_can_shrink_in_flex() {
+    // header + list in a fixed-height column: the list scrolls instead of overflowing.
+    let css = |ov: &str| format!(
+        ".col {{ display: flex; flex-direction: column; height: 300px }}
+         .head {{ height: 50px; flex-shrink: 0 }} .list {{ flex-grow: 1; {ov} }} .item {{ height: 1000px }}"
+    );
+    let mut dom = Dom::new();
+    let col = el(&mut dom, ROOT, "div", "col");
+    el(&mut dom, col, "div", "head");
+    let list = el(&mut dom, col, "div", "list");
+    el(&mut dom, list, "div", "item");
+    assert_eq!(rect(&layout(&dom, &css("overflow: auto")), list).unwrap().h, 250.0);
+    assert_eq!(rect(&layout(&dom, &css("")), list).unwrap().h, 1000.0, "without overflow it grows to its content");
+}

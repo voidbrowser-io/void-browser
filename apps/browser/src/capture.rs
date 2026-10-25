@@ -1,4 +1,4 @@
-﻿//! Offscreen capture: render the current scene into a GPU texture and save
+//! Offscreen capture: render the current scene into a GPU texture and save
 //! it as PNG. Used by `--auto` scripts (tests, CI, screenshots).
 
 use std::path::Path;

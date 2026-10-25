@@ -59,7 +59,25 @@ Every tab runs its own JS engine and DOM. A tab can open:
 
 Shortcuts: `Ctrl+T` new tab · `Ctrl+W` close · `Ctrl+L` address bar ·
 `Ctrl+Tab` / `Ctrl+1…9` switch · `Alt+←/→` back/forward · `F5` reload ·
-`Ctrl+A/C/V` in inputs.
+`Ctrl+A/C/V` in inputs · `Ctrl+=` / `Ctrl+-` / `Ctrl+0` zoom in, out, reset.
+
+Scrolling and zoom:
+
+| Input | What it does |
+|---|---|
+| Wheel | Scrolls the innermost scroll container under the pointer; at its limit, the next one out scrolls |
+| `Shift`+wheel | Scrolls sideways |
+| `Ctrl`+wheel | Zooms |
+| `↑` `↓` `←` `→` | 40px |
+| `PageUp` / `PageDown`, `Space` / `Shift+Space` | 87.5% of the container height |
+| `Home` / `End` | Start / end |
+
+Keys scroll only when no input has focus. They scroll the container under
+the pointer, or the page when the pointer is over the browser UI.
+Scrollbars are thin overlay thumbs: drawn on top, no layout space.
+
+Zoom is per tab, in steps from 50% to 300%. The toolbar shows the zoom
+level when it is not 100%.
 
 ```bash
 # Serve the demo over HTTP and open it in Void
@@ -77,6 +95,8 @@ cargo run -p void-browser --release -- http://localhost:8080/
 | ES modules, TSX/TS natively | Classic scripts, `document.write`, `with` |
 | Signals (`signal`, `computed`, `effect`, `For`, `Show`) | Virtual DOM diffing |
 | `border-radius: continuous` / `corner-shape: squircle` | — |
+| `overflow`, `overflow-x/y`: `visible`, `clip`, `hidden`, `auto`, `scroll`; the page root scrolls | Scrollbar styling (`::-webkit-scrollbar`, `scrollbar-width`, `scrollbar-color`) |
+| Overlay scrollbars | Scrollbars that take layout space, `body` → viewport overflow propagation |
 
 ## Writing a Void app
 
@@ -114,17 +134,30 @@ cargo test -p void-browser --test e2e   # real window + GPU, driven by --auto
 | Suite | What it covers |
 |---|---|
 | `void-dom` | tree operations, focus, event paths |
-| `void-css` | parsing, nesting, selectors, specificity, cascade, `var()`, `oklch()`, shorthands |
-| `void-layout` | flex, grid, border-box, inline text, blockification, nowrap, inputs |
+| `void-css` | parsing, nesting, selectors, specificity, cascade, `var()`, `oklch()`, shorthands, `overflow` |
+| `void-layout` | flex, grid, border-box, inline text, blockification, nowrap, inputs, scroll containers in flex |
+| `void-paint` | clipping, scroll offsets and ranges, nested scrollers, layer balance |
 | `void-js` | TSX, URL loading, HTML entry, signals, `For`/`Show`, events, timers, privileges |
-| `void-browser` (e2e) | tabs, history, address bar, links, demo app, legacy refusal, GPU screenshots |
+| `void-browser` (e2e) | tabs, history, address bar, links, demo app, legacy refusal, wheel and keyboard scrolling, zoom, Ctrl shortcuts, GPU screenshots |
 | `web-react` | the React baseline (vitest + Testing Library) |
 
 E2E tests open a real window. On machines without a GPU, set `VOID_SKIP_E2E=1`.
 
-`--auto` scripts support `click x y`, `click-text <text>`, `type`, `key ctrl+t`,
-`nav <url>`, `wait <ms>`, `expect <text>`, `expect-title`, `expect-tabs <n>`,
-`shot <file.png>` and `quit`. A failed `expect` exits with code 1.
+`--auto` scripts support these steps:
+
+| Step | What it does |
+|---|---|
+| `click x y`, `click-text <text>`, `move x y`, `move-on <text>` | Pointer input; `<text>` finds the visible element showing it |
+| `type <text>`, `key <spec>` | Keyboard; `key` takes `ctrl+t`, `enter`, `up`, `down`, `pageup`, `pagedown`, `home`, `end`, `space`, `plus`, `minus`, … |
+| `scroll x y dy [ctrl\|shift]` | Wheel at (x, y); positive `dy` scrolls down |
+| `scroll-on <text> \| <dy> [ctrl\|shift]` | Wheel over the element showing `<text>` |
+| `nav <url>`, `wait <ms>`, `shot <file.png>`, `quit` | Navigation, timing, screenshots |
+| `expect <text>`, `expect-title`, `expect-tabs <n>`, `expect-zoom <percent>` | Checks |
+| `expect-hidden <text>` | The text is on the page but not visible (scrolled away or clipped) |
+| `where <text>` | Prints the window position of `<text>`, for writing tests |
+
+`key ctrl+<letter>` sends the control character as the key, as Windows does.
+A failed `expect` exits with code 1.
 
 ## Windows installer
 

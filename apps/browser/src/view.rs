@@ -6,14 +6,26 @@ use parley::{FontContext, LayoutContext};
 use std::path::PathBuf;
 use std::time::Instant;
 use url::Url;
-use vello::kurbo::{Affine, Point};
+use vello::kurbo::{Affine, Point, Vec2};
 use vello::Scene;
 use void_css::{cascade, uses_hover, UA_CSS};
-use void_dom::{NodeId, NodeKind};
+use void_dom::{NodeId, NodeKind, ROOT};
 use void_js::{Engine, HostCmd};
 use void_layout::{Frame, TextBrush};
-use void_paint::{error_overlay, HitBox, Painter};
+use void_paint::{error_overlay, HitBox, Painter, Scroller};
 use winit::keyboard::{Key, NamedKey};
+
+const ZOOM_STEPS: [f64; 13] = [0.5, 0.67, 0.75, 0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0, 2.5, 3.0];
+
+/// How far to scroll. Pages and edges are resolved against the container that
+/// actually moves, so a chained scroll pages by the right height.
+#[derive(Debug, Clone, Copy)]
+pub enum ScrollAmount {
+    Px(Vec2),
+    Pages(f64),
+    ToStart,
+    ToEnd,
+}
 
 pub struct View {
     pub url: Url,
@@ -25,7 +37,10 @@ pub struct View {
     frame: Option<Frame>,
     frame_size: (f32, f32),
     hits: Vec<HitBox>,
+    scrollers: Vec<Scroller>,
     hover_sensitive: bool,
+    /// Page zoom (1.0 = 100%). Per tab, kept across navigations.
+    pub zoom: f64,
     pub boot_ms: f64,
     pub layout_ms: f64,
     pub paint_ms: f64,
@@ -43,7 +58,9 @@ impl View {
             frame: None,
             frame_size: (0.0, 0.0),
             hits: Vec::new(),
+            scrollers: Vec::new(),
             hover_sensitive: false,
+            zoom: 1.0,
             boot_ms: 0.0,
             layout_ms: 0.0,
             paint_ms: 0.0,
@@ -56,6 +73,7 @@ impl View {
         self.frame = None;
         self.engine = None;
         self.hits.clear();
+        self.scrollers.clear();
         let privileged = pages::privileged(&self.url);
         let (engine, error) = match Engine::boot(&self.url, UA_CSS, pages::builtin, privileged, host_info.to_string()) {
             Ok(e) => (e, None),
@@ -140,11 +158,24 @@ impl View {
         let t0 = Instant::now();
         let engine = self.engine.as_ref().unwrap();
         let dom = engine.dom.borrow();
-        let mut painter = Painter { scene, fcx, lcx, dom: &dom, transform, hits: Vec::new(), caret_on };
+        let mut painter =
+            Painter { scene, fcx, lcx, dom: &dom, transform, hits: Vec::new(), scrollers: Vec::new(), caret_on };
         if let Some(frame) = &self.frame {
             painter.paint(frame);
         }
         self.hits = std::mem::take(&mut painter.hits);
+        self.scrollers = std::mem::take(&mut painter.scrollers);
+        drop(dom);
+        // Store the clamped offsets, and forget offsets of boxes that can no longer
+        // scroll, so content that shrinks and grows again starts at the top.
+        let mut dom = engine.dom.borrow_mut();
+        for i in 0..dom.nodes.len() {
+            if dom.nodes[i].scroll != (0.0, 0.0) {
+                let id = i as NodeId;
+                let kept = self.scrollers.iter().find(|s| s.id == id).map(|s| (s.offset.x as f32, s.offset.y as f32));
+                dom.set_scroll(id, kept.unwrap_or_default());
+            }
+        }
         drop(dom);
         if let Some(err) = &self.error {
             error_overlay(scene, fcx, lcx, transform, size, err);
@@ -153,7 +184,7 @@ impl View {
     }
 
     pub fn hit(&self, p: Point) -> Option<NodeId> {
-        self.hits.iter().rev().find(|h| h.rect.contains(p)).map(|h| h.id)
+        self.hits.iter().rev().find(|h| h.contains(p)).map(|h| h.id)
     }
 
     /// Update `:hover`. Returns whether the node under the pointer is clickable.
@@ -245,16 +276,17 @@ impl View {
     }
 
     /// Text editing for the focused `<input>`, then `input`/`keydown` events.
-    pub fn key(&mut self, key: &Key, text: Option<&str>) {
-        let Some(engine) = &self.engine else { return };
+    /// Returns `true` if the key may still do its default action (scrolling):
+    /// no input had focus and the page did not call `preventDefault()`.
+    pub fn key(&mut self, key: &Key, text: Option<&str>) -> bool {
+        let Some(engine) = &self.engine else { return true };
         let key_name = match key {
             Key::Named(n) => format!("{n:?}"),
             Key::Character(c) => c.to_string(),
             _ => String::new(),
         };
         let Some(id) = engine.dom.borrow().focus else {
-            self.dispatch(void_dom::ROOT, "keydown", "", &key_name);
-            return;
+            return self.dispatch(void_dom::ROOT, "keydown", "", &key_name);
         };
         let changed = {
             let mut dom = engine.dom.borrow_mut();
@@ -292,6 +324,7 @@ impl View {
             self.dispatch(id, "input", &value, &key_name);
         }
         self.dispatch(id, "keydown", &value, &key_name);
+        false
     }
 
     /// Insert text (paste) into the focused input.
@@ -339,8 +372,68 @@ impl View {
                 };
                 text_of(&dom, h.id).trim() == text || placeholder == Some(text)
             })
-            .min_by(|a, b| a.rect.area().total_cmp(&b.rect.area()))
-            .map(|h| h.rect.center())
+            // Only the part you can see is clickable.
+            .map(|h| h.rect.intersect(h.clip))
+            .filter(|r| r.width() > 0.5 && r.height() > 0.5)
+            .min_by(|a, b| a.area().total_cmp(&b.area()))
+            .map(|r| r.center())
+    }
+
+    /// Scrollers that may handle a scroll at `at`, innermost first. Without a
+    /// pointer position (e.g. keys while the pointer is over the browser UI)
+    /// only the page itself scrolls.
+    fn scroll_chain(&self, at: Option<Point>) -> Vec<usize> {
+        match at {
+            Some(p) => (0..self.scrollers.len()).rev().filter(|&i| self.scrollers[i].clip.contains(p)).collect(),
+            None => self.scrollers.iter().position(|s| s.id == ROOT).into_iter().collect(),
+        }
+    }
+
+    /// Scroll the innermost container under `at`; if it is already at its limit,
+    /// the next container out scrolls instead. Returns whether anything moved.
+    /// Only a repaint is needed, never a relayout.
+    pub fn scroll_by(&mut self, at: Option<Point>, amount: ScrollAmount) -> bool {
+        let Some(engine) = &self.engine else { return false };
+        for i in self.scroll_chain(at) {
+            let sc = self.scrollers[i];
+            let delta = match amount {
+                ScrollAmount::Px(d) => d,
+                ScrollAmount::Pages(n) => Vec2::new(0.0, (sc.clip.height() * 0.875).max(40.0) * n),
+                ScrollAmount::ToStart => Vec2::new(0.0, -sc.max.y),
+                ScrollAmount::ToEnd => Vec2::new(0.0, sc.max.y),
+            };
+            let next = sc.clamp(sc.offset + delta);
+            if next != sc.offset {
+                engine.dom.borrow_mut().set_scroll(sc.id, (next.x as f32, next.y as f32));
+                // Keep the cached offset current so repeated scrolls before the next paint add up.
+                self.scrollers[i].offset = next;
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Keyboard scrolling when no input has focus. Returns whether the key was used.
+    pub fn scroll_key(&mut self, key: &Key, shift: bool, at: Option<Point>) -> bool {
+        let amount = match key {
+            Key::Named(NamedKey::ArrowDown) => ScrollAmount::Px(Vec2::new(0.0, 40.0)),
+            Key::Named(NamedKey::ArrowUp) => ScrollAmount::Px(Vec2::new(0.0, -40.0)),
+            Key::Named(NamedKey::ArrowRight) => ScrollAmount::Px(Vec2::new(40.0, 0.0)),
+            Key::Named(NamedKey::ArrowLeft) => ScrollAmount::Px(Vec2::new(-40.0, 0.0)),
+            Key::Named(NamedKey::PageDown) => ScrollAmount::Pages(1.0),
+            Key::Named(NamedKey::PageUp) => ScrollAmount::Pages(-1.0),
+            Key::Named(NamedKey::Space) => ScrollAmount::Pages(if shift { -1.0 } else { 1.0 }),
+            Key::Named(NamedKey::Home) => ScrollAmount::ToStart,
+            Key::Named(NamedKey::End) => ScrollAmount::ToEnd,
+            _ => return false,
+        };
+        self.scroll_by(at, amount)
+    }
+
+    /// `dir`: +1 zoom in, -1 zoom out, 0 reset — in the usual browser steps.
+    pub fn zoom_step(&mut self, dir: i32) {
+        let i = ZOOM_STEPS.iter().position(|s| (s - self.zoom).abs() < 1e-3).unwrap_or(5) as i32;
+        self.zoom = if dir == 0 { 1.0 } else { ZOOM_STEPS[(i + dir).clamp(0, ZOOM_STEPS.len() as i32 - 1) as usize] };
     }
 
     pub fn take_cmds(&self) -> Vec<HostCmd> {

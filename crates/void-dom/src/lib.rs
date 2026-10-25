@@ -25,6 +25,9 @@ pub struct Node {
     pub value: String,
     /// The whole input value is selected (typing replaces it).
     pub selected: bool,
+    /// Scroll offset of a scroll container, in CSS pixels. Changing it only
+    /// needs a repaint, never a relayout, so it does not set `dirty`.
+    pub scroll: (f32, f32),
 }
 
 impl Node {
@@ -60,6 +63,7 @@ impl Dom {
             listeners: HashSet::new(),
             value: String::new(),
             selected: false,
+            scroll: (0.0, 0.0),
         });
         (self.nodes.len() - 1) as NodeId
     }
@@ -137,6 +141,13 @@ impl Dom {
             }
         }
         self.dirty = true;
+    }
+
+    /// Set a scroll offset. Paint-only state: does not mark the DOM dirty.
+    pub fn set_scroll(&mut self, id: NodeId, offset: (f32, f32)) {
+        if let Some(node) = self.nodes.get_mut(id as usize) {
+            node.scroll = offset;
+        }
     }
 
     /// Focus an `<input>` and select its value, like clicking an address bar.
